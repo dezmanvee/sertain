@@ -18,6 +18,9 @@ export default function Search({ placeholder }: { placeholder: string }) {
     //set the page parameter to 1
     params.set("page", "1");
 
+    //set the query parameter to the search term
+    //if term is empty, delete the query parameter
+
     if (term) {
       params.set("query", term);
     } else {
