@@ -44,9 +44,14 @@
     // Send invoiceData to the server or API
 
     //Insert the invoice into the database
-    await sql`
+    try {
+      await sql`
       INSERT INTO invoices (customer_id, amount, status, date)
       VALUES (${invoiceData.customerId}, ${invoiceData.amount}, ${invoiceData.status}, ${invoiceData.date})`;
+
+    } catch (error) {
+      console.error("Error creating invoice:", error);
+    }
 
     //Revalidate the invoices cache
     revalidatePath("/dashboard/invoices");
@@ -82,10 +87,16 @@
     const amountInCents = amount * 100;
 
     //update the invoice in the database
-    await sql`
+    try {
+      await sql`
       UPDATE invoices
       SET customer_id = ${customerId}, amount = ${amountInCents}, status = ${status}
       WHERE id = ${id}`;
+      
+    } catch (error) {
+      console.error("Error updating invoice:", error);
+      
+    }
 
     //Revalidate the invoices cache
     revalidatePath("/dashboard/invoices");
@@ -96,7 +107,7 @@
 
   // Function to delete an invoice
   export async function deleteInvoice(id: string) {
-
+    // throw new Error("Failed to delete invoice");
 
     //Delete the invoice from the database
     await sql`
