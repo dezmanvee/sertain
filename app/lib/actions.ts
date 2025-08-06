@@ -5,10 +5,20 @@
   import { revalidatePath } from "next/cache";
   import { redirect } from "next/navigation";
 
+  export type State = {
+    errors: {
+
+      customerId?: string[];
+      amount?: string[];
+      status?: string[];
+    },
+    message: string | null;
+  }
+
   //Connect to the database
     const sql = postgres(process.env.POSTGRES_URL!, { ssl: "require" });
   
-  export async function createInvoice(formData: FormData) {
+  export async function createInvoice(prevState: State, formData: FormData) {
 
 
     const rawFormData = {
@@ -19,38 +29,50 @@
     // validate form data with zod
     const FormSchema = z.object({
       id: z.string(),
-      customerId: z.string(),
-      amount: z.coerce.number(),
-      status: z.enum(["pending", "paid"]),
+      customerId: z.string({
+        invalid_type_error: "Please select a customer"
+      }),
+      amount: z.coerce.number().gt(0, {
+        message: "Please enter a valid amount"}),
+
+      status: z.enum(["pending", "paid"], {
+        message: "Please select an invoice status"}),
       date: z.string(),
     });
 
     const CreateInvoive = FormSchema.omit({ id: true, date: true });
 
-    const { customerId, amount, status } = CreateInvoive.parse(rawFormData);
+    const validatedFields = CreateInvoive.safeParse(rawFormData);
+
+    //Check if the form data is valid{
+    if (!validatedFields.success) {
+      return {
+        ...prevState,
+        errors: validatedFields.error.flatten().fieldErrors,
+        message: "Please fix the errors in the form",
+      }
+    }
+    
+    //Extract the validated data
+    const { customerId, amount, status } = validatedFields.data;
 
     //Convert amount to cents
     const amountInCents = amount * 100;
     //Add date in ISO format
     const date = new Date().toISOString().split("T")[0];
 
-    // Create invoice data object
-    const invoiceData = {
-      customerId,
-      amount: amountInCents,
-      status,
-      date,
-    };
-    // Send invoiceData to the server or API
 
     //Insert the invoice into the database
     try {
       await sql`
       INSERT INTO invoices (customer_id, amount, status, date)
-      VALUES (${invoiceData.customerId}, ${invoiceData.amount}, ${invoiceData.status}, ${invoiceData.date})`;
+      VALUES (${customerId}, ${amountInCents}, ${status}, ${date})`;
 
     } catch (error) {
-      console.error("Error creating invoice:", error);
+ 
+      return {
+        message: "Database Error: Failed to create invoice",
+      }
     }
 
     //Revalidate the invoices cache
