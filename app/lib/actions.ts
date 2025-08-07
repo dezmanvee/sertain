@@ -18,7 +18,7 @@
   //Connect to the database
     const sql = postgres(process.env.POSTGRES_URL!, { ssl: "require" });
   
-  export async function createInvoice(prevState: State, formData: FormData) {
+  export async function createInvoice(prevState: State, formData: FormData){
 
 
     const rawFormData = {
@@ -47,10 +47,9 @@
     //Check if the form data is valid{
     if (!validatedFields.success) {
       return {
-        ...prevState,
         errors: validatedFields.error.flatten().fieldErrors,
         message: "Please fix the errors in the form",
-      }
+      };
     }
     
     //Extract the validated data
@@ -69,10 +68,10 @@
       VALUES (${customerId}, ${amountInCents}, ${status}, ${date})`;
 
     } catch (error) {
- 
       return {
-        message: "Database Error: Failed to create invoice",
-      }
+        errors: {},
+        message: "Database Error: Failed to create invoice," + error,
+      };
     }
 
     //Revalidate the invoices cache
@@ -84,7 +83,7 @@
 
   // Function to update an invoice
 
-  export async function updateInvoice(id: string, formData: FormData) {
+  export async function updateInvoice(id: string, prevState: State, formData: FormData) {
 
     //Connect to the database
     const sql = postgres(process.env.POSTGRES_URL!, { ssl: "require" });
@@ -94,9 +93,15 @@
     //Validate form data with Zod
     const FormSchema = z.object({
       id: z.string(),
-      customerId: z.string(),
-      amount: z.coerce.number(),
-      status: z.enum(["pending", "paid"]),
+      customerId: z.string(
+        {
+          invalid_type_error: "Please select a customer",
+        }
+      ),
+      amount: z.coerce.number().gt(0, {
+        message: "Please enter a valid amount"}),
+      status: z.enum(["pending", "paid"], {
+        message: "Please select an invoice status"}),
       date: z.string(),
     });
 
@@ -104,7 +109,20 @@
     const UpdateInvoiceSchema = FormSchema.omit({ id: true, date: true });
 
     //Parse the form data
-    const { customerId, amount, status } = UpdateInvoiceSchema.parse(rawData);
+    const validatedFields = UpdateInvoiceSchema.safeParse(rawData);
+
+    //Check if the form data is valid
+    if (!validatedFields.success) {
+      return {
+        // ...prevState,
+        errors: validatedFields.error.flatten().fieldErrors,
+        message: "Please fix the errors in the form",
+      };
+    }
+
+    //Extract the validated data
+    const { customerId, amount, status } = validatedFields.data;
+  
     //Convert amount to cents
     const amountInCents = amount * 100;
 
@@ -116,7 +134,11 @@
       WHERE id = ${id}`;
       
     } catch (error) {
-      console.error("Error updating invoice:", error);
+      return {
+        // ...prevState,
+        errors: {},
+        message: "Database Error: Failed to update invoice," + error
+      };
       
     }
 
